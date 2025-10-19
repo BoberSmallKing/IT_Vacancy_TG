@@ -20,11 +20,31 @@ async def create_payment(amount: float, description: str, user_id: int):
         },
         "capture": True,
         "description": description,
-        "metadata": {"user_id": user_id}
+        "metadata": {"user_id": user_id},
+        "receipt": {
+            "customer": { 
+                "full_name": "Ivanov Ivan Ivanovich",
+                "email": "sashabobr2020@mail.ru",
+                "phone": "79316063416"
+            },
+            "items": [
+                {
+                    "description": "IT",
+                    "quantity": "1.00",
+                    "amount": {
+                        "value": f"{amount:.2f}",
+                        "currency": "RUB"
+                    },
+                    "vat_code": 1,
+                    "payment_mode": "full_payment",
+                    "payment_subject": "commodity"
+                }
+            ],
+            "tax_system_code": 1
+        }
     }, str(uuid.uuid4()))
 
     return payment.confirmation.confirmation_url, payment.id
-
 
 def check_payment_status(payment_id: str):
     payment = Payment.find_one(payment_id)
