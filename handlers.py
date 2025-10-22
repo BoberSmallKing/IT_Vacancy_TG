@@ -50,18 +50,26 @@ async def show_draft(user_id: int, target: types.Message, only_draft: bool = Tru
         return
 
     text = "📰 *Твой черновик*\n" + "─" * 30 + "\n"
-    if draft.message_id:
-        text += f"🔗 *Главная ссылка*: https://t.me/SkillFlows/1/{draft.message_id}\n"
-        if draft.theme_message_id:
-            text += f"🔗 *Тематическая ссылка*: https://t.me/SkillFlows/{theme_list[draft.theme_name]}/{draft.theme_message_id}\n\n"
+    if not draft.is_draft:
+        if draft.message_id:
+            text += f"🔗 *Главная ссылка*: https://t.me/SkillFlows/1/{draft.message_id}\n"
+            if draft.theme_message_id:
+                text += f"🔗 *Тематическая ссылка*: https://t.me/SkillFlows/{theme_list[draft.theme_name]}/{draft.theme_message_id}\n\n"
     text += f"✍️ *Описание:*\n{draft.description or '(не заполнено)'}\n\n"
     text += f"👤 *Контакт:* @{draft.contact or '(не заполнено)'}\n"
     text += f"📔 *Тема:* {draft.theme_name or '(темы нет)'}\n\n"
     
 
 
-    if draft.published_at and not draft.is_draft:
-        expiry = draft.published_at + timedelta(days=30)
+    published_at = draft.published_at
+    if isinstance(published_at, str):
+        try:
+            published_at = datetime.fromisoformat(published_at)
+        except Exception:
+            published_at = None
+
+    if published_at and not draft.is_draft:
+        expiry = published_at + timedelta(days=30)
         remaining = expiry - datetime.now(timezone.utc)
         days, seconds = remaining.days, remaining.seconds
         hours = seconds // 3600
@@ -89,7 +97,6 @@ async def update_post(user_id: int):
     if not draft or draft.is_draft or not draft.message_id:
         return True
 
-    # === Получаем рейтинг пользователя ===
     async with async_session() as session:
         result = await session.execute(select(User).where(User.telegram_id == user_id))
         user = result.scalar_one_or_none()
@@ -118,10 +125,8 @@ async def update_post(user_id: int):
 
     if draft.theme_name and draft.theme_change_count == 2:
         if draft.theme_message_id:
-            try:
-                await bot.delete_message(chat_id=CHAT_ID, message_id=draft.theme_message_id)
-            except Exception as e:
-                logging.warning(f"Не удалось удалить старое сообщение в теме: {e}")
+             await bot.delete_message(chat_id=CHAT_ID, message_id=draft.theme_message_id)
+
 
         if draft.theme_name in theme_list:
             thread_id = theme_list[draft.theme_name]
@@ -454,14 +459,14 @@ async def cb_publish(callback: types.CallbackQuery):
         )
         user = result.scalar_one_or_none()
 
-        # if not draft.paid and not user.is_first_visit:
-        #     url, payment_id = await create_payment(1, "Оплата публикации резюме", callback.from_user.id)
-        #     await create_or_update_draft(callback.from_user.id, payment_id=payment_id)
-        #     await callback.message.answer(
-        #         "Для публикации нужно оплатить 1 руб.\nПосле оплаты нажми /check",
-        #         reply_markup=payment_menu_keyboard(url)
-        #     )
-        #     return
+        if not draft.paid and not user.is_first_visit:
+            url, payment_id = await create_payment(1, "Оплата публикации резюме", callback.from_user.id)
+            await create_or_update_draft(callback.from_user.id, payment_id=payment_id)
+            await callback.message.answer(
+                "Для публикации нужно оплатить 1 руб.\nПосле оплаты нажми /check",
+                reply_markup=payment_menu_keyboard(url)
+            )
+            return
 
         if user.is_first_visit:
             user.is_first_visit = False

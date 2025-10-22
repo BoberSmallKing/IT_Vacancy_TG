@@ -1,7 +1,19 @@
 from sqlalchemy import select, delete
 from db import async_session, Draft, User
 from datetime import datetime, timezone
+import hashlib
+import json
+from db import redis_client
 
+def calculate_draft_hash(draft):
+    """Создает хеш из основных полей черновика для отслеживания изменений"""
+    data = {
+        "description": draft.description,
+        "contact": draft.contact,
+        "theme_name": draft.theme_name,
+        "photo": bool(draft.photo)  # Только факт наличия фото
+    }
+    return hashlib.md5(json.dumps(data, sort_keys=True).encode()).hexdigest()
 
 # --- Пользователь ---
 async def get_user(telegram_id: int):
@@ -39,7 +51,29 @@ async def refresh_id_key(user: User):
 
 # --- Черновики ---
 async def get_draft(telegram_id: int):
-    """Возвращает черновик по telegram_id пользователя"""
+    """Возвращает черновик по telegram_id пользователя с использованием кеша Redis"""
+    # Проверяем кеш
+    cache_key = f"draft:{telegram_id}"
+    cached_data = await redis_client.get(cache_key)
+    
+    if cached_data:
+        # Если данные в кеше, десериализуем и возвращаем
+        draft_dict = json.loads(cached_data)
+        # Конвертируем даты из ISO-строк обратно в datetime
+        for key in ("created_at", "published_at"):
+            value = draft_dict.get(key)
+            if isinstance(value, str):
+                try:
+                    draft_dict[key] = datetime.fromisoformat(value)
+                except Exception:
+                    draft_dict[key] = None
+        # Создаем объект Draft из словаря
+        draft = Draft()
+        for key, value in draft_dict.items():
+            setattr(draft, key, value)
+        return draft
+    
+    # Если нет в кеше, получаем из БД
     async with async_session() as session:
         # Получаем внутренний ID пользователя
         result = await session.execute(
@@ -52,13 +86,22 @@ async def get_draft(telegram_id: int):
         draft_result = await session.execute(
             select(Draft).where(Draft.user_id == user.id)
         )
-        return draft_result.scalar_one_or_none()
+        draft = draft_result.scalar_one_or_none()
+        
+        if draft:
+            # Сохраняем в кеш на 5 минут
+            draft_dict = {c.name: getattr(draft, c.name) for c in draft.__table__.columns}
+            # Преобразуем datetime в строки
+            for key, value in draft_dict.items():
+                if isinstance(value, datetime):
+                    draft_dict[key] = value.isoformat()
+            
+            await redis_client.setex(cache_key, 300, json.dumps(draft_dict))
+        
+        return draft
 
 async def create_or_update_draft(telegram_id: int, **kwargs):
-    """
-    Создаёт или обновляет черновик пользователя по telegram_id.
-    Работает безопасно, не перезаписывает None, поддерживает частичное обновление.
-    """
+    """Создаёт или обновляет черновик пользователя по telegram_id с использованием кеша Redis"""
     async with async_session() as session:
         # --- Находим пользователя ---
         result = await session.execute(
@@ -83,14 +126,21 @@ async def create_or_update_draft(telegram_id: int, **kwargs):
             # чтобы не затирать поля None-ами по ошибке
             if value is not None and hasattr(draft, key):
                 setattr(draft, key, value)
+        
+        # Вычисляем хеш для отслеживания изменений
+        draft.last_hash = calculate_draft_hash(draft)
 
         await session.commit()
         await session.refresh(draft)
+        
+        # Инвалидируем кеш
+        cache_key = f"draft:{telegram_id}"
+        await redis_client.delete(cache_key)
+        
         return draft
 
-
 async def delete_draft(telegram_id: int):
-    """Удаляет черновик по telegram_id"""
+    """Удаляет черновик по telegram_id и инвалидирует кеш"""
     async with async_session() as session:
         result = await session.execute(
             select(User).where(User.telegram_id == telegram_id)
@@ -103,5 +153,9 @@ async def delete_draft(telegram_id: int):
             delete(Draft).where(Draft.user_id == user.id)
         )
         await session.commit()
+        
+        # Инвалидируем кеш
+        cache_key = f"draft:{telegram_id}"
+        await redis_client.delete(cache_key)
 
 

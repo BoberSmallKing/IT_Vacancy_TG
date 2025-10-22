@@ -7,11 +7,25 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, declarative_base, relationship
 from sqlalchemy import Column, Integer, BigInteger, Text, DateTime, func, Boolean, ForeignKey, UniqueConstraint
 from dotenv import load_dotenv
+from sqlalchemy.pool import QueuePool
+import redis.asyncio as redis
 
 load_dotenv()
 
+REDIS_URL = f"redis://{os.getenv('REDIS_HOST', 'localhost')}:{os.getenv('REDIS_PORT', 6379)}/0"
+redis_pool = redis.ConnectionPool.from_url(REDIS_URL)
+redis_client = redis.Redis.from_pool(redis_pool)
+
+# Настройка пула подключений к базе данных
 DATABASE_URL = f"postgresql+asyncpg://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}@{os.getenv('DB_HOST')}/{os.getenv('DB_NAME')}"
-engine = create_async_engine(DATABASE_URL, echo=True)
+engine = create_async_engine(
+    DATABASE_URL, 
+    echo=False,
+    pool_size=20,
+    max_overflow=40,
+    pool_recycle=1800,  # обновлять соединения каждые 30 мин
+    pool_timeout=10      # ждать соединение не более 10 сек
+)
 async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 Base = declarative_base()
 
@@ -52,6 +66,7 @@ class Draft(Base):
     paid = Column(Boolean, default=False)
     payment_id = Column(Text)
     is_draft = Column(Boolean, default=True)
+    last_hash = Column(Text)
 
     user = relationship("User", back_populates="drafts")
     
