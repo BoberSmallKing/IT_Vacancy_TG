@@ -11,7 +11,7 @@ def calculate_draft_hash(draft):
         "description": draft.description,
         "contact": draft.contact,
         "theme_name": draft.theme_name,
-        "photo": bool(draft.photo)  # Только факт наличия фото
+        "photo": bool(draft.photo) 
     }
     return hashlib.md5(json.dumps(data, sort_keys=True).encode()).hexdigest()
 
@@ -36,7 +36,7 @@ async def register_user(telegram_id: int, username: str | None = None):
             user = User(telegram_id=telegram_id, username=username)
             session.add(user)
             await session.commit()
-            await session.refresh(user)  # получаем user.id
+            await session.refresh(user) 
         return user
 
 
@@ -133,7 +133,6 @@ async def create_or_update_draft(telegram_id: int, **kwargs):
         await session.commit()
         await session.refresh(draft)
         
-        # Инвалидируем кеш
         cache_key = f"draft:{telegram_id}"
         await redis_client.delete(cache_key)
         

@@ -7,12 +7,11 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, declarative_base, relationship
 from sqlalchemy import Column, Integer, BigInteger, Text, DateTime, func, Boolean, ForeignKey, UniqueConstraint
 from dotenv import load_dotenv
-from sqlalchemy.pool import QueuePool
 import redis.asyncio as redis
 
 load_dotenv()
 
-REDIS_URL = f"redis://{os.getenv('REDIS_HOST', 'localhost')}:{os.getenv('REDIS_PORT', 6379)}/0"
+REDIS_URL = f"redis://{os.getenv('REDIS_HOST')}:{os.getenv('REDIS_PORT')}/0"
 redis_pool = redis.ConnectionPool.from_url(REDIS_URL)
 redis_client = redis.Redis.from_pool(redis_pool)
 
@@ -23,8 +22,8 @@ engine = create_async_engine(
     echo=False,
     pool_size=20,
     max_overflow=40,
-    pool_recycle=1800,  # обновлять соединения каждые 30 мин
-    pool_timeout=10      # ждать соединение не более 10 сек
+    pool_recycle=1800,  
+    pool_timeout=10      
 )
 async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 Base = declarative_base()

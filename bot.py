@@ -2,7 +2,6 @@ import asyncio
 import logging
 import os
 from aiogram import Bot, Dispatcher
-from aiogram.fsm.storage.memory import MemoryStorage
 import asyncio
 from aiogram.fsm.storage.redis import RedisStorage
 from db import REDIS_URL

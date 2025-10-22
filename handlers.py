@@ -376,9 +376,10 @@ async def cb_delete_confirm(callback: types.CallbackQuery):
 async def cb_delete_execute(callback: types.CallbackQuery):
     draft = await get_draft(callback.from_user.id)
     bot = callback.message.bot
-    await bot.delete_message(chat_id=CHAT_ID, message_id=draft.message_id)
-    if draft.theme_message_id:
-        await bot.delete_message(chat_id=CHAT_ID, message_id=draft.theme_message_id)
+    if not draft.is_draft:
+        await bot.delete_message(chat_id=CHAT_ID, message_id=draft.message_id)
+        if draft.theme_message_id:
+            await bot.delete_message(chat_id=CHAT_ID, message_id=draft.theme_message_id)
     await delete_draft(callback.from_user.id)
     await callback.message.answer("Черновик и опубликованное сообщение удалены ❌")
     await callback.answer()
