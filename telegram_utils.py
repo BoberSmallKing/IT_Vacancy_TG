@@ -1,4 +1,3 @@
-# Создать файл telegram_utils.py:
 import asyncio
 import logging
 import time
@@ -13,10 +12,8 @@ last_calls = []
 async def rate_limit(max_per_second=30):
     global last_calls
     now = time.time()
-    # Удаляем старые вызовы (старше 1 секунды)
     last_calls = [t for t in last_calls if now - t < 1]
     if len(last_calls) >= max_per_second:
-        # Подождать, если слишком много запросов
         sleep_time = 1 - (now - last_calls[0])
         if sleep_time > 0:
             await asyncio.sleep(sleep_time)

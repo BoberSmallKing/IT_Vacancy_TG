@@ -378,7 +378,7 @@ async def cb_delete_execute(callback: types.CallbackQuery):
     bot = callback.message.bot
     if not draft.is_draft:
         await bot.delete_message(chat_id=CHAT_ID, message_id=draft.message_id)
-        if draft.theme_message_id:
+        if draft.theme_name:
             await bot.delete_message(chat_id=CHAT_ID, message_id=draft.theme_message_id)
     await delete_draft(callback.from_user.id)
     await callback.message.answer("Черновик и опубликованное сообщение удалены ❌")
@@ -460,14 +460,14 @@ async def cb_publish(callback: types.CallbackQuery):
         )
         user = result.scalar_one_or_none()
 
-        if not draft.paid and not user.is_first_visit:
-            url, payment_id = await create_payment(1, "Оплата публикации резюме", callback.from_user.id)
-            await create_or_update_draft(callback.from_user.id, payment_id=payment_id)
-            await callback.message.answer(
-                "Для публикации нужно оплатить 1 руб.\nПосле оплаты нажми /check",
-                reply_markup=payment_menu_keyboard(url)
-            )
-            return
+        # if not draft.paid and not user.is_first_visit:
+        #     url, payment_id = await create_payment(1, "Оплата публикации резюме", callback.from_user.id)
+        #     await create_or_update_draft(callback.from_user.id, payment_id=payment_id)
+        #     await callback.message.answer(
+        #         "Для публикации нужно оплатить 1 руб.\nПосле оплаты нажми /check",
+        #         reply_markup=payment_menu_keyboard(url)
+        #     )
+        #     return
 
         if user.is_first_visit:
             user.is_first_visit = False
